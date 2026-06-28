@@ -11,7 +11,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-linear-to-r from-cyan-600 to-blue-800 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center">
+      <header className="bg-linear-to-r from-cyan-600 to-blue-800 text-white p-4 sticky top-0 z-45 shadow-md flex justify-between items-center">
         <Link href="/#today" className="flex items-center space-x-2.5 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-sm shrink-0">
             <Activity size={20} className="text-white" />

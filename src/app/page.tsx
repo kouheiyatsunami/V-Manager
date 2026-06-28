@@ -167,11 +167,9 @@ export default function MatchesPage() {
       onTouchEnd={handleTouchEnd}
     >
       {/* ★ 修正: sticky top-[56px] でヘッダーの直下に隙間なく固定 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-14 z-40 shadow-sm">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <div className="flex items-center space-x-1">
           <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
-          {/* ★ 追加: ワンボタンで今日に戻るボタン */}
-          <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
         </div>
         <div className="flex flex-col items-center relative">
           <label htmlFor="date-picker" className="sr-only">日付を選択</label>
@@ -182,6 +180,8 @@ export default function MatchesPage() {
             onChange={(e) => setCurrentDate(e.target.value)}
             className="text-sm font-bold text-gray-800 bg-transparent text-center focus:outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
           />
+          {/* ★ 追加: ワンボタンで今日に戻るボタン */}
+          <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
         </div>
         <button onClick={() => changeDate(1)} aria-label="翌日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
       </div>
