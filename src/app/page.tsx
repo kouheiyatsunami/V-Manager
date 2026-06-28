@@ -33,17 +33,16 @@ export default function MatchesPage() {
     setIsMounted(true);
   }, []);
 
-  // ★ 追加: ヘッダーのタイトルクリック（#todayへの遷移）を検知して今日の日付に戻す
   useEffect(() => {
     if (!isMounted) return;
     const handleHashChange = () => {
       if (window.location.hash === '#today') {
         setCurrentDate(getJSTDateString());
-        window.history.replaceState(null, '', window.location.pathname); // ハッシュをクリア
+        window.history.replaceState(null, '', window.location.pathname);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // 初回チェック
+    handleHashChange();
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [isMounted]);
 
@@ -160,40 +159,44 @@ export default function MatchesPage() {
 
   if (!isMounted) return <div className="min-h-screen bg-[#f2f4f5]"></div>;
 
+  const todayStr = getJSTDateString();
+  const isToday = currentDate === todayStr;
+
   return (
     <div 
       className="min-h-screen bg-[#f2f4f5] pb-28 font-sans overflow-x-hidden"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ★ 修正: sticky top-[56px] でヘッダーの直下に隙間なく固定 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center space-x-1">
-          <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
+      {/* ★ 修正: 日付とトグルを1つのコンテナにまとめ、top-0 で固定 */}
+      <div className="sticky top-0 z-40 bg-[#f2f4f5] border-b border-gray-200 shadow-sm">
+        <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center scroll-mt-20">
+          <div className="flex items-center space-x-1">
+            <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
+          </div>
+          <div className="flex flex-col items-center relative">
+            <label htmlFor="date-picker" className="sr-only">日付を選択</label>
+            <input
+              id="date-picker"
+              type="date"
+              value={currentDate}
+              onChange={(e) => setCurrentDate(e.target.value)}
+              className="text-sm font-bold text-gray-800 bg-transparent text-center focus:outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+            />
+            <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
+          </div>
+          <button onClick={() => changeDate(1)} aria-label="翌日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
         </div>
-        <div className="flex flex-col items-center relative">
-          <label htmlFor="date-picker" className="sr-only">日付を選択</label>
-          <input
-            id="date-picker"
-            type="date"
-            value={currentDate}
-            onChange={(e) => setCurrentDate(e.target.value)}
-            className="text-sm font-bold text-gray-800 bg-transparent text-center focus:outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-          />
-          {/* ★ 追加: ワンボタンで今日に戻るボタン */}
-          <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
-        </div>
-        <button onClick={() => changeDate(1)} aria-label="翌日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
-      </div>
 
-      <div className="flex justify-center mt-4 px-4">
-        <div className="bg-gray-200 p-1 rounded-xl flex space-x-1 w-full max-w-sm">
-          <button onClick={() => setViewMode('court')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'court' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            コート別
-          </button>
-          <button onClick={() => setViewMode('group')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'group' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            グループ別
-          </button>
+        <div className="flex justify-center px-4 py-2.5 bg-white">
+          <div className="bg-gray-200 p-1 rounded-xl flex space-x-1 w-full max-w-sm">
+            <button onClick={() => setViewMode('court')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'court' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              コート別
+            </button>
+            <button onClick={() => setViewMode('group')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'group' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              グループ別
+            </button>
+          </div>
         </div>
       </div>
 
@@ -262,6 +265,7 @@ export default function MatchesPage() {
                             </div>
                             <div className={`flex-1 text-left text-sm md:text-base truncate ${isTeamBWon ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{match.team_b_name}</div>
                           </div>
+                          
                           <button onClick={(e) => { e.preventDefault(); toggleMatchFavorite(match.id); }} aria-label="試合をお気に入り" className="w-8 flex justify-end pl-2">
                             <Star size={18} className={`transition-colors ${isMatchFav ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`} fill={isMatchFav ? 'currentColor' : 'none'} />
                           </button>
