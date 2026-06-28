@@ -215,7 +215,7 @@ export default function ResultsPage() {
               {Object.keys(groupedStandings || {}).sort().map((groupName) => (
                 <div key={groupName} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
                   <div className="bg-white px-4 py-3 border-b border-gray-100 flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-libear-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-sm">
+                    <div className="w-6 h-6 rounded bg-linear-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-sm">
                       <span className="text-white text-[10px] font-black">{groupName.replace('Group ', '')}</span>
                     </div>
                     <h2 className="text-[15px] font-bold text-gray-900">{groupName}</h2>

@@ -15,9 +15,7 @@ export default function MatchesPage() {
   const [favoriteMatches, setFavoriteMatches] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
 
-  // ★ 修正: 確実に日本時間 (JST) で今日の日付文字列 (YYYY-MM-DD) を取得するヘルパー関数
   const getJSTDateString = (dateObj: Date = new Date()) => {
-    // 協定世界時(UTC)から9時間(540分)足して日本時間にする
     const jstDate = new Date(dateObj.getTime() + (9 * 60 * 60 * 1000));
     return jstDate.toISOString().split('T')[0];
   };
@@ -34,6 +32,20 @@ export default function MatchesPage() {
     if (savedMatches) setFavoriteMatches(JSON.parse(savedMatches));
     setIsMounted(true);
   }, []);
+
+  // ★ 追加: ヘッダーのタイトルクリック（#todayへの遷移）を検知して今日の日付に戻す
+  useEffect(() => {
+    if (!isMounted) return;
+    const handleHashChange = () => {
+      if (window.location.hash === '#today') {
+        setCurrentDate(getJSTDateString());
+        window.history.replaceState(null, '', window.location.pathname); // ハッシュをクリア
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // 初回チェック
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [isMounted]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -115,21 +127,12 @@ export default function MatchesPage() {
     setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
-  // ★ 修正: 日付変更処理も日本時間ベースで行う
   const changeDate = (days: number) => {
-    const dateObj = new Date(currentDate);
-    dateObj.setDate(dateObj.getDate() + days);
-    // currentDateがすでに文字列(例: '2026-06-25')として扱われているため、
-    // ここでDateオブジェクト化したものはUTCとして解釈される場合があります。
-    // yyyy-mm-dd を維持して安全に加減算するロジックに変更。
     const [year, month, day] = currentDate.split('-').map(Number);
     const safeDate = new Date(year, month - 1, day + days);
-    
-    // safeDateはローカルタイムゾーンで計算されるため、そのままフォーマット
     const newY = safeDate.getFullYear();
     const newM = String(safeDate.getMonth() + 1).padStart(2, '0');
     const newD = String(safeDate.getDate()).padStart(2, '0');
-    
     setCurrentDate(`${newY}-${newM}-${newD}`);
   };
 
@@ -157,18 +160,19 @@ export default function MatchesPage() {
 
   if (!isMounted) return <div className="min-h-screen bg-[#f2f4f5]"></div>;
 
-  const todayStr = getJSTDateString();
-  const isToday = currentDate === todayStr;
-
   return (
     <div 
       className="min-h-screen bg-[#f2f4f5] pb-28 font-sans overflow-x-hidden"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ★ 修正: top-[64px] を top-0 に戻し、親要素(レイアウト)との関係で自然に固定されるようにする */}
-      <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-40 shadow-sm scroll-mt-20">
-        <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
+      {/* ★ 修正: sticky top-[56px] でヘッダーの直下に隙間なく固定 */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-14 z-40 shadow-sm">
+        <div className="flex items-center space-x-1">
+          <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
+          {/* ★ 追加: ワンボタンで今日に戻るボタン */}
+          <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
+        </div>
         <div className="flex flex-col items-center relative">
           <label htmlFor="date-picker" className="sr-only">日付を選択</label>
           <input
@@ -250,6 +254,7 @@ export default function MatchesPage() {
                               {viewMode === 'court' ? `第${match.match_order}試合` : `${match.court} 第${match.match_order}試合`}
                             </span>
                           </div>
+
                           <div className="flex-1 flex items-center justify-center space-x-2 md:space-x-4 ml-2">
                             <div className={`flex-1 text-right text-sm md:text-base truncate ${isTeamAWon ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{match.team_a_name}</div>
                             <div className={`w-14 shrink-0 text-center rounded text-sm py-1 ${match.status === 'live' ? 'text-orange-500 font-bold bg-orange-50' : 'text-gray-900 font-bold bg-gray-100'}`}>
