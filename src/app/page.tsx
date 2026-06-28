@@ -8,35 +8,26 @@ export default function MatchesPage() {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ★ 修正1: 初期値はすべて空にしておき、サーバーとクライアントの描画結果を一致させる
   const [currentDate, setCurrentDate] = useState<string>('');
   const [viewMode, setViewMode] = useState<'group' | 'court'>('court');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [favoriteTeams, setFavoriteTeams] = useState<string[]>([]);
   const [favoriteMatches, setFavoriteMatches] = useState<string[]>([]);
-  
-  // マウント判定用フラグ
   const [isMounted, setIsMounted] = useState(false);
 
-  // ★ 修正2: ブラウザでの初回描画時（マウント後）に記憶していたデータを読み込む
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     setCurrentDate(sessionStorage.getItem('matches_date') || today);
     setViewMode((sessionStorage.getItem('matches_viewMode') as 'group' | 'court') || 'court');
-    
     const savedCollapsed = sessionStorage.getItem('matches_collapsed');
     if (savedCollapsed) setCollapsedGroups(JSON.parse(savedCollapsed));
-
     const savedTeams = localStorage.getItem('favorite_teams');
     if (savedTeams) setFavoriteTeams(JSON.parse(savedTeams));
-    
     const savedMatches = localStorage.getItem('favorite_matches');
     if (savedMatches) setFavoriteMatches(JSON.parse(savedMatches));
-
     setIsMounted(true);
   }, []);
 
-  // ★ 修正3: データ変更時の保存処理（マウント済みの時だけ実行）
   useEffect(() => {
     if (!isMounted) return;
     sessionStorage.setItem('matches_date', currentDate);
@@ -66,9 +57,9 @@ export default function MatchesPage() {
       for (const m of data) {
         if (m.status === 'finished') continue;
         for (const teamKey of ['a', 'b']) {
-          const id = m[`team_${teamKey}_id`];
+          const teamId = m[`team_${teamKey}_id`];
           const ph = m[`team_${teamKey}_placeholder`];
-          if (!id && ph && ph.startsWith('{')) {
+          if (ph && ph.startsWith('{')) {
             try {
               const rule = JSON.parse(ph);
               let targetId = null;
@@ -82,7 +73,7 @@ export default function MatchesPage() {
                   targetId = rule.arg === 'winner' ? (aWin ? refM.team_a_id : refM.team_b_id) : (aWin ? refM.team_b_id : refM.team_a_id);
                 }
               }
-              if (targetId) {
+              if (targetId && targetId !== teamId) {
                 const updateObj = teamKey === 'a' ? { team_a_id: targetId } : { team_b_id: targetId };
                 await supabase.from('matches').update(updateObj).eq('id', m.id);
                 hasUpdate = true;
@@ -96,10 +87,8 @@ export default function MatchesPage() {
     setLoading(false);
   };
 
-  // ★ 修正4: DBの読み込みも currentDate が確定してから実行する
   useEffect(() => {
     if (!isMounted || !currentDate) return;
-    
     fetchMatches(currentDate);
     const channel = supabase.channel('matches_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => fetchMatches(currentDate))
@@ -129,8 +118,9 @@ export default function MatchesPage() {
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchEnd = (e: React.TouchEvent) => {
     const touchEndX = e.changedTouches[0].clientX;
-    if (touchStartX.current - touchEndX > 50) changeDate(1);
-    if (touchEndX - touchStartX.current > 50) changeDate(-1);
+    const swipeThreshold = window.innerWidth / 2;
+    if (touchStartX.current - touchEndX > swipeThreshold) changeDate(1);
+    if (touchEndX - touchStartX.current > swipeThreshold) changeDate(-1);
   };
 
   const groupedMatches = matches.reduce((acc: any, match) => {
@@ -146,10 +136,8 @@ export default function MatchesPage() {
     return acc;
   }, {});
 
-  // ★ 修正5: isMounted が true になるまでは空画面（またはスケルトン）を返し、エラーを防ぐ
   if (!isMounted) return <div className="min-h-screen bg-[#f2f4f5]"></div>;
 
-  // 今日の日付を取得 (YYYY-MM-DD形式)
   const todayStr = new Date().toISOString().split('T')[0];
   const isToday = currentDate === todayStr;
 
@@ -159,8 +147,7 @@ export default function MatchesPage() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 1. FotMob風 日付セレクター (今日の場合は id="today" を付与してスクロール可能に) */}
-      <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky z-40 shadow-sm scroll-mt-20">
+      <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-16 z-40 shadow-sm scroll-mt-20">
         <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
         <div className="flex flex-col items-center relative">
           <label htmlFor="date-picker" className="sr-only">日付を選択</label>
@@ -199,32 +186,24 @@ export default function MatchesPage() {
           }).map((groupKey) => {
             const isCollapsed = collapsedGroups[groupKey];
             const groupMatches = groupedMatches[groupKey];
-            // そのグループに含まれる最初の試合から大会名とIDを取得
             const firstMatch = groupMatches[0];
             const tournamentName = firstMatch?.tournament_name;
             const tournamentId = firstMatch?.tournament_id;
 
             return (
               <div key={groupKey} className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${groupKey === '⭐ お気に入り' ? 'border-orange-200 shadow-orange-100' : 'border-gray-200'}`}>
-                
-                {/* FotMob風: タップで開閉 */}
                 <div onClick={() => toggleGroup(groupKey)} className={`px-4 py-3 border-b flex flex-col cursor-pointer transition-colors ${groupKey === '⭐ お気に入り' ? 'bg-orange-50/50 border-orange-100 hover:bg-orange-50' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
-                  {/* ★ 追加: 大会名リンク表示 */}
                   {tournamentName && groupKey !== '⭐ お気に入り' && (
                     <div className="mb-1">
                       <Link 
                         href="/results" 
-                        onClick={(e) => {
-                          e.stopPropagation(); // グループの開閉イベントを止める
-                          sessionStorage.setItem('results_tourneyId', tournamentId);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); sessionStorage.setItem('results_tourneyId', tournamentId); }}
                         className="text-[10px] text-gray-400 font-bold hover:text-cyan-600 hover:underline uppercase tracking-wider"
                       >
                         {tournamentName}
                       </Link>
                     </div>
                   )}
-                  
                   <div className="flex justify-between items-center w-full">
                     <div className="flex items-center space-x-3">
                       <div className={`w-2 h-4 rounded-full ${groupKey === '⭐ お気に入り' ? 'bg-orange-400' : 'bg-cyan-500'}`}></div>
@@ -251,7 +230,6 @@ export default function MatchesPage() {
                               {viewMode === 'court' ? `第${match.match_order}試合` : `${match.court} 第${match.match_order}試合`}
                             </span>
                           </div>
-
                           <div className="flex-1 flex items-center justify-center space-x-2 md:space-x-4 ml-2">
                             <div className={`flex-1 text-right text-sm md:text-base truncate ${isTeamAWon ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{match.team_a_name}</div>
                             <div className={`w-14 shrink-0 text-center rounded text-sm py-1 ${match.status === 'live' ? 'text-orange-500 font-bold bg-orange-50' : 'text-gray-900 font-bold bg-gray-100'}`}>
@@ -259,13 +237,7 @@ export default function MatchesPage() {
                             </div>
                             <div className={`flex-1 text-left text-sm md:text-base truncate ${isTeamBWon ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{match.team_b_name}</div>
                           </div>
-                          
-                          {/* 試合お気に入りボタン (e.preventDefaultでLink遷移を防ぐ) */}
-                          <button 
-                            onClick={(e) => { e.preventDefault(); toggleMatchFavorite(match.id); }} 
-                            aria-label="試合をお気に入り" 
-                            className="w-8 flex justify-end pl-2"
-                          >
+                          <button onClick={(e) => { e.preventDefault(); toggleMatchFavorite(match.id); }} aria-label="試合をお気に入り" className="w-8 flex justify-end pl-2">
                             <Star size={18} className={`transition-colors ${isMatchFav ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`} fill={isMatchFav ? 'currentColor' : 'none'} />
                           </button>
                         </Link>

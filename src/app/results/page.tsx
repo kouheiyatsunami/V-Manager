@@ -6,8 +6,6 @@ import Link from 'next/link';
 
 export default function ResultsPage() {
   const [tournaments, setTournaments] = useState<any[]>([]);
-  
-  // ハイドレーションエラーを回避しつつ、前回開いていたタブと大会を記憶
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'GS' | 'KS'>('GS');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -17,7 +15,6 @@ export default function ResultsPage() {
   const [gsMatches, setGsMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 初期化：SessionStorageから復元
   useEffect(() => {
     const savedTourneyId = sessionStorage.getItem('results_tourneyId');
     const savedTab = sessionStorage.getItem('results_activeTab') as 'GS' | 'KS';
@@ -39,7 +36,6 @@ export default function ResultsPage() {
     });
   }, []);
 
-  // 状態が変わったタイミングで記憶を更新
   useEffect(() => {
     if (isInitialized && selectedTournamentId) sessionStorage.setItem('results_tourneyId', selectedTournamentId);
   }, [selectedTournamentId, isInitialized]);
@@ -48,21 +44,19 @@ export default function ResultsPage() {
     if (isInitialized) sessionStorage.setItem('results_activeTab', activeTab);
   }, [activeTab, isInitialized]);
 
-  // 大会データとKSツリーの構築
   useEffect(() => {
     if (!selectedTournamentId) return;
     const fetchData = async () => {
       setLoading(true);
       const { data: stData } = await supabase.from('group_standings').select('*').eq('tournament_id', selectedTournamentId);
       if (stData) setStandings(stData);
+
       const { data: gsData } = await supabase.from('match_details').select('*').eq('tournament_id', selectedTournamentId).eq('stage', 'group').eq('status', 'finished');
       if (gsData) setGsMatches(gsData);
+
       const { data: ksData } = await supabase.from('match_details').select('*').eq('tournament_id', selectedTournamentId).eq('stage', 'knockout').order('match_date').order('match_order');
       
       if (ksData) {
-        // -------------------------------------------------------------
-        // 1. 未確定プレースホルダーの自動確定（DB更新）
-        // -------------------------------------------------------------
         let hasUpdate = false;
         for (const m of ksData) {
           if (m.status === 'finished') continue;
@@ -70,7 +64,7 @@ export default function ResultsPage() {
             const teamId = m[`team_${teamKey}_id`];
             const ph = m[`team_${teamKey}_placeholder`];
             
-            if (!teamId && ph) {
+            if (ph) { 
               const phStr = typeof ph === 'string' ? ph : JSON.stringify(ph);
               if (phStr.startsWith('{')) {
                 try {
@@ -78,24 +72,30 @@ export default function ResultsPage() {
                   let targetId = null;
                   
                   if (rule.type === 'group') {
-                    // グループ順位からの解決
-                    const { data: std } = await supabase.from('group_standings').select('*').eq('group_id', rule.refId);
-                    if (std && std.length >= parseInt(rule.arg)) {
-                      targetId = std[parseInt(rule.arg) - 1].team_id;
+                    const allInGroup = stData?.filter(s => s.group_id === rule.refId) || [];
+                    const sortedGroup = allInGroup.sort((a, b) => {
+                      if (b.wins !== a.wins) return b.wins - a.wins;
+                      if (b.set_won_ratio !== a.set_won_ratio) return b.set_won_ratio - a.set_won_ratio;
+                      if (b.point_diff !== a.point_diff) return b.point_diff - a.point_diff;
+                      const h2h = gsData?.find(gm => (gm.team_a_id === a.team_id && gm.team_b_id === b.team_id) || (gm.team_a_id === b.team_id && gm.team_b_id === a.team_id));
+                      if (h2h) {
+                        const aWon = (h2h.team_a_id === a.team_id && h2h.team_a_sets > h2h.team_b_sets) || (h2h.team_b_id === a.team_id && h2h.team_b_sets > h2h.team_a_sets);
+                        return aWon ? -1 : 1;
+                      }
+                      return 0;
+                    });
+                    if (sortedGroup.length >= parseInt(rule.arg)) {
+                      targetId = sortedGroup[parseInt(rule.arg) - 1].team_id;
                     }
                   } else if (rule.type === 'match') {
-                    // 試合の勝敗からの解決
                     const { data: refM } = await supabase.from('matches').select('*').eq('id', rule.refId).single();
                     if (refM && refM.status === 'finished') {
                       const aWin = refM.team_a_sets > refM.team_b_sets;
-                      targetId = rule.arg === 'winner' 
-                        ? (aWin ? refM.team_a_id : refM.team_b_id) 
-                        : (aWin ? refM.team_b_id : refM.team_a_id);
+                      targetId = rule.arg === 'winner' ? (aWin ? refM.team_a_id : refM.team_b_id) : (aWin ? refM.team_b_id : refM.team_a_id);
                     }
                   }
                   
-                  // 条件を満たすチームが見つかればDBを更新
-                  if (targetId) {
+                  if (targetId && targetId !== teamId) {
                     const updateObj = teamKey === 'a' ? { team_a_id: targetId } : { team_b_id: targetId };
                     await supabase.from('matches').update(updateObj).eq('id', m.id);
                     hasUpdate = true;
@@ -106,15 +106,11 @@ export default function ResultsPage() {
           }
         }
 
-        // DBを自動更新した場合は、最新のデータを再取得して処理をやり直す
         if (hasUpdate) {
           fetchData();
           return;
         }
 
-        // -------------------------------------------------------------
-        // 2. 表示名の解決（★バグ修正：実際のチームIDがあればそちらを最優先）
-        // -------------------------------------------------------------
         const formattedKs = ksData.map(m => {
           let aRule = null, bRule = null;
           try { if (typeof m.team_a_placeholder === 'string' && m.team_a_placeholder.startsWith('{')) aRule = JSON.parse(m.team_a_placeholder); } catch(e){}
@@ -122,18 +118,14 @@ export default function ResultsPage() {
 
           return {
             ...m,
-            // チームIDがDBに存在すれば実際のチーム名を表示。無ければルールの名前、それも無ければプレースホルダー文字列。
             team_a_name: m.team_a_id ? m.team_a_name : (aRule ? aRule.label : (m.team_a_placeholder || '未定')),
             team_b_name: m.team_b_id ? m.team_b_name : (bRule ? bRule.label : (m.team_b_placeholder || '未定')),
             aRule,
             bRule,
-            isThirdPlace: (aRule?.arg === 'loser' || bRule?.arg === 'loser') // 3位決定戦の判定
+            isThirdPlace: (aRule?.arg === 'loser' || bRule?.arg === 'loser')
           };
         });
 
-        // -------------------------------------------------------------
-        // 3. 階層（Depth）の計算
-        // -------------------------------------------------------------
         const getMatchDepth = (matchId: string, visited = new Set<string>()): number => {
           if (visited.has(matchId)) return 0;
           visited.add(matchId);
@@ -143,9 +135,6 @@ export default function ResultsPage() {
         };
         formattedKs.forEach(m => { m.depth = getMatchDepth(m.id); });
 
-        // -------------------------------------------------------------
-        // 4. 上下位置（Tree Order）の計算：決勝から逆算して完璧な上下ソート順を割り当てる
-        // -------------------------------------------------------------
         formattedKs.forEach(m => { m.treeOrder = m.match_order; });
         const finals = formattedKs.filter(m => m.depth === 0 && !m.isThirdPlace);
 
@@ -153,11 +142,9 @@ export default function ResultsPage() {
           const match = formattedKs.find(m => m.id === matchId);
           if (!match) return;
           match.treeOrder = currentOrder;
-          // Team Aは上(-)、Team Bは下(+)に配置
           if (match.aRule?.type === 'match') assignTreeOrder(match.aRule.refId, currentOrder - step, step / 2);
           if (match.bRule?.type === 'match') assignTreeOrder(match.bRule.refId, currentOrder + step, step / 2);
         };
-        // 決勝を0として、準決勝は-500と+500、準々決勝は-750,-250...と再帰的に割り振る
         finals.forEach((f, index) => assignTreeOrder(f.id, index * 1000, 500));
 
         setKsMatches(formattedKs);
@@ -174,14 +161,12 @@ export default function ResultsPage() {
     return acc;
   }, {});
 
-  // ツリーカラムの生成
   const maxDepth = Math.max(...ksMatches.map(m => m.depth || 0), 0);
   const ksColumns = [];
   if (ksMatches.length > 0) {
     for (let i = maxDepth; i >= 0; i--) {
       ksColumns.push({
         depth: i,
-        // 上下（Tree Order）で正しくソート
         matches: ksMatches.filter(m => m.depth === i).sort((a, b) => (a.treeOrder || 0) - (b.treeOrder || 0))
       });
     }
@@ -193,6 +178,9 @@ export default function ResultsPage() {
     if (depth === 2) return '準々決勝';
     return `Round of ${Math.pow(2, depth + 1)}`;
   };
+
+  const maxMatchesInCol = Math.max(...ksColumns.map(c => c.matches.filter(m => !m.isThirdPlace).length), 1);
+  const dynamicMinHeight = Math.max(650, maxMatchesInCol * 95); 
 
   return (
     <div className="min-h-screen bg-[#f2f4f5] text-gray-900 font-sans pb-28">
@@ -246,41 +234,37 @@ export default function ResultsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                      {groupedStandings[groupName]
-                        .sort((a: any, b: any) => {
-                          if (b.wins !== a.wins) return b.wins - a.wins;
-                          if (b.set_won_ratio !== a.set_won_ratio) return b.set_won_ratio - a.set_won_ratio;
-                          if (b.point_diff !== a.point_diff) return b.point_diff - a.point_diff;
-                          const h2h = gsMatches.find(m => 
-                            (m.team_a_id === a.team_id && m.team_b_id === b.team_id) || 
-                            (m.team_a_id === b.team_id && m.team_b_id === a.team_id)
-                          );
-                          if (h2h) {
-                            const aWon = (h2h.team_a_id === a.team_id && h2h.team_a_sets > h2h.team_b_sets) ||
-                                         (h2h.team_b_id === a.team_id && h2h.team_b_sets > h2h.team_a_sets);
-                            return aWon ? -1 : 1;
-                          }
-                          return 0;
-                        })
-                        .map((team: any, index: number) => {
-                          const isTopTwo = index < 2;
-                          return (
-                            <tr key={team.team_id} className={`hover:bg-gray-50 transition-colors ${isTopTwo ? 'bg-cyan-50/30' : ''}`}>
-                              <td className="px-3 py-3 text-center">
-                                <span className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full mx-auto ${isTopTwo ? 'bg-cyan-100 text-cyan-600' : 'text-gray-400'}`}>{index + 1}</span>
-                              </td>
-                              <td className="px-3 py-3 font-bold text-[13px]"><Link href={`/team/${team.team_id}`} className="text-cyan-600 hover:text-cyan-800 transition-colors">{team.team_name || team.university_name}</Link></td>
-                              <td className="px-2 py-3 text-center text-gray-500">{team.matches_played}</td>
-                              <td className="px-2 py-3 text-center font-bold text-cyan-600">{team.wins}</td>
-                              <td className="px-2 py-3 text-center text-gray-500">{team.losses}</td>
-                              <td className="px-2 py-3 text-center text-gray-500 font-medium">{team.set_won_ratio.toFixed(3)}</td>
-                              <td className="px-2 py-3 text-center font-medium">
-                                <span className={team.point_diff > 0 ? 'text-orange-500 font-bold' : team.point_diff < 0 ? 'text-gray-400' : 'text-gray-500'}>{team.point_diff > 0 ? `+${team.point_diff}` : team.point_diff}</span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
+                        {groupedStandings[groupName]
+                          .sort((a: any, b: any) => {
+                            if (b.wins !== a.wins) return b.wins - a.wins;
+                            if (b.set_won_ratio !== a.set_won_ratio) return b.set_won_ratio - a.set_won_ratio;
+                            if (b.point_diff !== a.point_diff) return b.point_diff - a.point_diff;
+                            const h2h = gsMatches.find(m => (m.team_a_id === a.team_id && m.team_b_id === b.team_id) || (m.team_a_id === b.team_id && m.team_b_id === a.team_id));
+                            if (h2h) {
+                              const aWon = (h2h.team_a_id === a.team_id && h2h.team_a_sets > h2h.team_b_sets) || (h2h.team_b_id === a.team_id && h2h.team_b_sets > h2h.team_a_sets);
+                              return aWon ? -1 : 1;
+                            }
+                            return 0;
+                          })
+                          .map((team: any, index: number) => {
+                            const isTopTwo = index < 2;
+                            return (
+                              <tr key={team.team_id} className={`hover:bg-gray-50 transition-colors ${isTopTwo ? 'bg-cyan-50/30' : ''}`}>
+                                <td className="px-3 py-3 text-center">
+                                  <span className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full mx-auto ${isTopTwo ? 'bg-cyan-100 text-cyan-600' : 'text-gray-400'}`}>{index + 1}</span>
+                                </td>
+                                <td className="px-3 py-3 font-bold text-[13px]"><Link href={`/team/${team.team_id}`} className="text-cyan-600 hover:text-cyan-800 transition-colors">{team.team_name || team.university_name}</Link></td>
+                                <td className="px-2 py-3 text-center text-gray-500">{team.matches_played}</td>
+                                <td className="px-2 py-3 text-center font-bold text-cyan-600">{team.wins}</td>
+                                <td className="px-2 py-3 text-center text-gray-500">{team.losses}</td>
+                                <td className="px-2 py-3 text-center text-gray-500 font-medium">{team.set_won_ratio.toFixed(3)}</td>
+                                <td className="px-2 py-3 text-center font-medium">
+                                  <span className={team.point_diff > 0 ? 'text-orange-500 font-bold' : team.point_diff < 0 ? 'text-gray-400' : 'text-gray-500'}>{team.point_diff > 0 ? `+${team.point_diff}` : team.point_diff}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
                     </table>
                   </div>
                 </div>
@@ -288,9 +272,6 @@ export default function ResultsPage() {
             </div>
           )
         ) : (
-          /* =========================================
-             完全自動整列 トーナメント表 (バイナリツリーUI)
-             ========================================= */
           ksMatches.length === 0 ? (
             <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
               <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
@@ -299,19 +280,20 @@ export default function ResultsPage() {
             </div>
           ) : (
             <div className="w-full overflow-x-auto pb-8 custom-scrollbar">
-              <div className="flex flex-row space-x-12 min-w-max p-2 px-6 h-[75vh] min-h-162.5 relative">
+              <div 
+                className="flex flex-row space-x-12 min-w-max p-2 px-6 relative" 
+                style={{ height: '75vh', minHeight: `${dynamicMinHeight}px` }}
+              >
                 {ksColumns.map((col) => {
                   const finalMatches = col.matches.filter(m => !m.isThirdPlace);
                   const thirdPlaceMatches = col.matches.filter(m => m.isThirdPlace);
 
                   return (
                     <div key={col.depth} className="flex flex-col w-64 h-full relative pt-10">
-                      {/* 列ヘッダー */}
                       <div className="absolute top-0 w-full text-center bg-gray-800 text-white rounded-full py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm z-10">
                         {getRoundName(col.depth)}
                       </div>
                       
-                      {/* メインの試合ブロック（フレックスの分割比で完璧にセンタリング配置） */}
                       <div className="flex flex-col flex-1 w-full relative">
                         {finalMatches.map((match) => {
                           const isFinished = match.status === 'finished';
@@ -319,8 +301,8 @@ export default function ResultsPage() {
                           const isBWin = isFinished && match.team_b_sets > match.team_a_sets;
                           
                           return (
-                            <div key={match.id} className="flex-1 flex flex-col justify-center relative w-full">
-                              <Link href={`/match/${match.id}`} className="block relative bg-white rounded-xl shadow-sm border border-gray-200 p-3 m-1 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
+                            <div key={match.id} className="flex-1 flex flex-col justify-center relative w-full py-1">
+                              <Link href={`/match/${match.id}`} className="block relative bg-white rounded-xl shadow-sm border border-gray-200 p-3 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
                                 <div className="flex justify-between items-center text-[10px] text-gray-400 mb-2 border-b border-gray-100 pb-1">
                                   <span className="flex items-center"><Calendar size={10} className="mr-1"/>{match.match_date} - {match.court}</span>
                                   {match.status === 'live' && <span className="text-orange-500 font-bold animate-pulse bg-orange-50 px-1.5 rounded">LIVE</span>}
@@ -341,7 +323,6 @@ export default function ResultsPage() {
                         })}
                       </div>
 
-                      {/* 3位決定戦（決勝の列の一番下に絶対配置） */}
                       {thirdPlaceMatches.length > 0 && (
                         <div className="absolute -bottom-4 w-full flex flex-col justify-end pb-2">
                           <div className="text-[10px] text-center text-gray-400 font-bold mb-1.5 uppercase tracking-widest border-t border-dashed pt-2">3位決定戦</div>
