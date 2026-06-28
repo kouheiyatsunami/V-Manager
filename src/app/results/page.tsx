@@ -180,7 +180,7 @@ export default function ResultsPage() {
   };
 
   const maxMatchesInCol = Math.max(...ksColumns.map(c => c.matches.filter(m => !m.isThirdPlace).length), 1);
-  const dynamicMinHeight = Math.max(650, maxMatchesInCol * 95); 
+  const dynamicMinHeight = Math.max(650, maxMatchesInCol * 110); 
 
   return (
     <div className="min-h-screen bg-[#f2f4f5] text-gray-900 font-sans pb-28">
@@ -284,10 +284,9 @@ export default function ResultsPage() {
             </div>
           ) : (
             <>
-              {/* 修正: style={{}} を避け、styleタグを使って動的な高さを注入 */}
               <style>{`.bracket-container { min-height: ${dynamicMinHeight}px; }`}</style>
               <div className="w-full overflow-x-auto pb-8 custom-scrollbar">
-                <div className="flex flex-row space-x-12 min-w-max p-2 px-6 relative h-[105vh] bracket-container">
+                <div className="flex flex-row space-x-12 min-w-max p-2 px-6 relative bracket-container">
                   {ksColumns.map((col) => {
                     const finalMatches = col.matches.filter(m => !m.isThirdPlace);
                     const thirdPlaceMatches = col.matches.filter(m => m.isThirdPlace);
