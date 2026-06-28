@@ -180,7 +180,7 @@ export default function ResultsPage() {
   };
 
   const maxMatchesInCol = Math.max(...ksColumns.map(c => c.matches.filter(m => !m.isThirdPlace).length), 1);
-  const dynamicMinHeight = Math.max(650, maxMatchesInCol * 110); 
+  const dynamicMinHeight = Math.max(650, maxMatchesInCol * 120); 
 
   return (
     <div className="min-h-screen bg-[#f2f4f5] text-gray-900 font-sans pb-28">

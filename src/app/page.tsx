@@ -15,8 +15,15 @@ export default function MatchesPage() {
   const [favoriteMatches, setFavoriteMatches] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
 
+  // ★ 修正: 確実に日本時間 (JST) で今日の日付文字列 (YYYY-MM-DD) を取得するヘルパー関数
+  const getJSTDateString = (dateObj: Date = new Date()) => {
+    // 協定世界時(UTC)から9時間(540分)足して日本時間にする
+    const jstDate = new Date(dateObj.getTime() + (9 * 60 * 60 * 1000));
+    return jstDate.toISOString().split('T')[0];
+  };
+
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getJSTDateString();
     setCurrentDate(sessionStorage.getItem('matches_date') || today);
     setViewMode((sessionStorage.getItem('matches_viewMode') as 'group' | 'court') || 'court');
     const savedCollapsed = sessionStorage.getItem('matches_collapsed');
@@ -108,10 +115,22 @@ export default function MatchesPage() {
     setCollapsedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
+  // ★ 修正: 日付変更処理も日本時間ベースで行う
   const changeDate = (days: number) => {
     const dateObj = new Date(currentDate);
     dateObj.setDate(dateObj.getDate() + days);
-    setCurrentDate(dateObj.toISOString().split('T')[0]);
+    // currentDateがすでに文字列(例: '2026-06-25')として扱われているため、
+    // ここでDateオブジェクト化したものはUTCとして解釈される場合があります。
+    // yyyy-mm-dd を維持して安全に加減算するロジックに変更。
+    const [year, month, day] = currentDate.split('-').map(Number);
+    const safeDate = new Date(year, month - 1, day + days);
+    
+    // safeDateはローカルタイムゾーンで計算されるため、そのままフォーマット
+    const newY = safeDate.getFullYear();
+    const newM = String(safeDate.getMonth() + 1).padStart(2, '0');
+    const newD = String(safeDate.getDate()).padStart(2, '0');
+    
+    setCurrentDate(`${newY}-${newM}-${newD}`);
   };
 
   const touchStartX = useRef(0);
@@ -138,7 +157,7 @@ export default function MatchesPage() {
 
   if (!isMounted) return <div className="min-h-screen bg-[#f2f4f5]"></div>;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getJSTDateString();
   const isToday = currentDate === todayStr;
 
   return (
@@ -147,7 +166,8 @@ export default function MatchesPage() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-16 z-40 shadow-sm scroll-mt-20">
+      {/* ★ 修正: top-[64px] を top-0 に戻し、親要素(レイアウト)との関係で自然に固定されるようにする */}
+      <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-40 shadow-sm scroll-mt-20">
         <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
         <div className="flex flex-col items-center relative">
           <label htmlFor="date-picker" className="sr-only">日付を選択</label>
