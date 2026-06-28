@@ -164,17 +164,18 @@ export default function MatchesPage() {
 
   return (
     <div 
-      className="min-h-screen bg-[#f2f4f5] pb-28 font-sans overflow-x-hidden"
+      className="min-h-screen bg-[#f2f4f5] pb-28 font-sans"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ★ 修正: 日付とトグルを1つのコンテナにまとめ、top-0 で固定 */}
-      <div className="sticky top-0 z-40 bg-[#f2f4f5] border-b border-gray-200 shadow-sm">
-        <div id={isToday ? "today" : undefined} className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center scroll-mt-20">
-          <div className="flex items-center space-x-1">
-            <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
-          </div>
-          <div className="flex flex-col items-center relative">
+      {/* ★ 修正: stickyを阻害していた overflow-x-hidden を削除し、top-[56px] でヘッダーの裏に少し潜り込ませて隙間を消す */}
+      <div className="sticky top-[56px] z-40 bg-[#f2f4f5] border-b border-gray-200 shadow-sm">
+        
+        {/* 日付操作エリア */}
+        <div id={isToday ? "today" : undefined} className="bg-white px-4 py-3 flex justify-between items-center scroll-mt-24">
+          <button onClick={() => changeDate(-1)} aria-label="前日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
+          
+          <div className="flex items-center space-x-3 relative">
             <label htmlFor="date-picker" className="sr-only">日付を選択</label>
             <input
               id="date-picker"
@@ -183,12 +184,20 @@ export default function MatchesPage() {
               onChange={(e) => setCurrentDate(e.target.value)}
               className="text-sm font-bold text-gray-800 bg-transparent text-center focus:outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
             />
-            <button onClick={() => setCurrentDate(getJSTDateString())} className="text-xs bg-cyan-50 text-cyan-600 font-bold px-2.5 py-1.5 rounded-lg border border-cyan-100 active:scale-95 transition-transform">今日</button>
+            {/* ★ 修正: 「今日」ボタンを中央付近に配置 */}
+            <button 
+              onClick={() => setCurrentDate(getJSTDateString())} 
+              className="text-[10px] bg-cyan-50 text-cyan-600 font-bold px-2 py-1 rounded border border-cyan-100 active:scale-95 transition-transform"
+            >
+              今日
+            </button>
           </div>
+
           <button onClick={() => changeDate(1)} aria-label="翌日へ" className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
         </div>
 
-        <div className="flex justify-center px-4 py-2.5 bg-white">
+        {/* ★ 修正: 切り替えボタンの背景をページの背景色（#f2f4f5）に統一 */}
+        <div className="flex justify-center px-4 py-2.5 bg-[#f2f4f5]">
           <div className="bg-gray-200 p-1 rounded-xl flex space-x-1 w-full max-w-sm">
             <button onClick={() => setViewMode('court')} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'court' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               コート別
