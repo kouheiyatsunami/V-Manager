@@ -215,7 +215,7 @@ export default function ResultsPage() {
               {Object.keys(groupedStandings || {}).sort().map((groupName) => (
                 <div key={groupName} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
                   <div className="bg-white px-4 py-3 border-b border-gray-100 flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-linear-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-sm">
+                    <div className="w-6 h-6 rounded bg-libear-to-br from-cyan-400 to-cyan-600 flex items-center justify-center shadow-sm">
                       <span className="text-white text-[10px] font-black">{groupName.replace('Group ', '')}</span>
                     </div>
                     <h2 className="text-[15px] font-bold text-gray-900">{groupName}</h2>
@@ -239,9 +239,13 @@ export default function ResultsPage() {
                             if (b.wins !== a.wins) return b.wins - a.wins;
                             if (b.set_won_ratio !== a.set_won_ratio) return b.set_won_ratio - a.set_won_ratio;
                             if (b.point_diff !== a.point_diff) return b.point_diff - a.point_diff;
-                            const h2h = gsMatches.find(m => (m.team_a_id === a.team_id && m.team_b_id === b.team_id) || (m.team_a_id === b.team_id && m.team_b_id === a.team_id));
+                            const h2h = gsMatches.find(m => 
+                              (m.team_a_id === a.team_id && m.team_b_id === b.team_id) || 
+                              (m.team_a_id === b.team_id && m.team_b_id === a.team_id)
+                            );
                             if (h2h) {
-                              const aWon = (h2h.team_a_id === a.team_id && h2h.team_a_sets > h2h.team_b_sets) || (h2h.team_b_id === a.team_id && h2h.team_b_sets > h2h.team_a_sets);
+                              const aWon = (h2h.team_a_id === a.team_id && h2h.team_a_sets > h2h.team_b_sets) ||
+                                           (h2h.team_b_id === a.team_id && h2h.team_b_sets > h2h.team_a_sets);
                               return aWon ? -1 : 1;
                             }
                             return 0;
@@ -279,83 +283,84 @@ export default function ResultsPage() {
               <p className="text-sm text-gray-500">登録されたノックアウトステージの試合がありません。</p>
             </div>
           ) : (
-            <div className="w-full overflow-x-auto pb-8 custom-scrollbar">
-              <div 
-                className="flex flex-row space-x-12 min-w-max p-2 px-6 relative" 
-                style={{ height: '75vh', minHeight: `${dynamicMinHeight}px` }}
-              >
-                {ksColumns.map((col) => {
-                  const finalMatches = col.matches.filter(m => !m.isThirdPlace);
-                  const thirdPlaceMatches = col.matches.filter(m => m.isThirdPlace);
+            <>
+              {/* 修正: style={{}} を避け、styleタグを使って動的な高さを注入 */}
+              <style>{`.bracket-container { min-height: ${dynamicMinHeight}px; }`}</style>
+              <div className="w-full overflow-x-auto pb-8 custom-scrollbar">
+                <div className="flex flex-row space-x-12 min-w-max p-2 px-6 relative h-[105vh] bracket-container">
+                  {ksColumns.map((col) => {
+                    const finalMatches = col.matches.filter(m => !m.isThirdPlace);
+                    const thirdPlaceMatches = col.matches.filter(m => m.isThirdPlace);
 
-                  return (
-                    <div key={col.depth} className="flex flex-col w-64 h-full relative pt-10">
-                      <div className="absolute top-0 w-full text-center bg-gray-800 text-white rounded-full py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm z-10">
-                        {getRoundName(col.depth)}
-                      </div>
-                      
-                      <div className="flex flex-col flex-1 w-full relative">
-                        {finalMatches.map((match) => {
-                          const isFinished = match.status === 'finished';
-                          const isAWin = isFinished && match.team_a_sets > match.team_b_sets;
-                          const isBWin = isFinished && match.team_b_sets > match.team_a_sets;
-                          
-                          return (
-                            <div key={match.id} className="flex-1 flex flex-col justify-center relative w-full py-1">
-                              <Link href={`/match/${match.id}`} className="block relative bg-white rounded-xl shadow-sm border border-gray-200 p-3 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
-                                <div className="flex justify-between items-center text-[10px] text-gray-400 mb-2 border-b border-gray-100 pb-1">
-                                  <span className="flex items-center"><Calendar size={10} className="mr-1"/>{match.match_date} - {match.court}</span>
-                                  {match.status === 'live' && <span className="text-orange-500 font-bold animate-pulse bg-orange-50 px-1.5 rounded">LIVE</span>}
-                                </div>
-                                <div className="space-y-1.5">
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className={`truncate mr-2 ${isAWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_a_name}</span>
-                                    <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isAWin ? 'bg-cyan-100 text-cyan-800' : 'bg-gray-50 text-gray-500'}`}>{isFinished ? match.team_a_sets : '-'}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className={`truncate mr-2 ${isBWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_b_name}</span>
-                                    <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isBWin ? 'bg-cyan-100 text-cyan-800' : 'bg-gray-50 text-gray-500'}`}>{isFinished ? match.team_b_sets : '-'}</span>
-                                  </div>
-                                </div>
-                              </Link>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {thirdPlaceMatches.length > 0 && (
-                        <div className="absolute -bottom-4 w-full flex flex-col justify-end pb-2">
-                          <div className="text-[10px] text-center text-gray-400 font-bold mb-1.5 uppercase tracking-widest border-t border-dashed pt-2">3位決定戦</div>
-                          {thirdPlaceMatches.map((match) => {
+                    return (
+                      <div key={col.depth} className="flex flex-col w-64 h-full relative pt-10">
+                        <div className="absolute top-0 w-full text-center bg-gray-800 text-white rounded-full py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm z-10">
+                          {getRoundName(col.depth)}
+                        </div>
+                        
+                        <div className="flex flex-col flex-1 w-full relative">
+                          {finalMatches.map((match) => {
                             const isFinished = match.status === 'finished';
                             const isAWin = isFinished && match.team_a_sets > match.team_b_sets;
                             const isBWin = isFinished && match.team_b_sets > match.team_a_sets;
+                            
                             return (
-                              <Link href={`/match/${match.id}`} key={match.id} className="block relative bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-3 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
-                                <div className="flex justify-between items-center text-[10px] text-gray-400 mb-2 border-b border-gray-200 pb-1">
-                                  <span className="flex items-center"><Calendar size={10} className="mr-1"/>{match.match_date}</span>
-                                  {match.status === 'live' && <span className="text-orange-500 font-bold animate-pulse">LIVE</span>}
-                                </div>
-                                <div className="space-y-1.5">
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className={`truncate mr-2 ${isAWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_a_name}</span>
-                                    <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isAWin ? 'bg-cyan-100 text-cyan-800' : 'bg-white border text-gray-500'}`}>{isFinished ? match.team_a_sets : '-'}</span>
+                              <div key={match.id} className="flex-1 flex flex-col justify-center relative w-full py-1">
+                                <Link href={`/match/${match.id}`} className="block relative bg-white rounded-xl shadow-sm border border-gray-200 p-3 m-1 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
+                                  <div className="flex justify-between items-center text-[10px] text-gray-400 mb-2 border-b border-gray-100 pb-1">
+                                    <span className="flex items-center"><Calendar size={10} className="mr-1"/>{match.match_date} - {match.court}</span>
+                                    {match.status === 'live' && <span className="text-orange-500 font-bold animate-pulse bg-orange-50 px-1.5 rounded">LIVE</span>}
                                   </div>
-                                  <div className="flex justify-between items-center text-sm">
-                                    <span className={`truncate mr-2 ${isBWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_b_name}</span>
-                                    <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isBWin ? 'bg-cyan-100 text-cyan-800' : 'bg-white border text-gray-500'}`}>{isFinished ? match.team_b_sets : '-'}</span>
+                                  <div className="space-y-1.5">
+                                    <div className="flex justify-between items-center text-sm">
+                                      <span className={`truncate mr-2 ${isAWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_a_name}</span>
+                                      <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isAWin ? 'bg-cyan-100 text-cyan-800' : 'bg-gray-50 text-gray-500'}`}>{isFinished ? match.team_a_sets : '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                      <span className={`truncate mr-2 ${isBWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_b_name}</span>
+                                      <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isBWin ? 'bg-cyan-100 text-cyan-800' : 'bg-gray-50 text-gray-500'}`}>{isFinished ? match.team_b_sets : '-'}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              </Link>
-                            )
+                                </Link>
+                              </div>
+                            );
                           })}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {thirdPlaceMatches.length > 0 && (
+                          <div className="absolute -bottom-4 w-full flex flex-col justify-end pb-2">
+                            <div className="text-[10px] text-center text-gray-400 font-bold mb-1.5 uppercase tracking-widest border-t border-dashed pt-2">3位決定戦</div>
+                            {thirdPlaceMatches.map((match) => {
+                              const isFinished = match.status === 'finished';
+                              const isAWin = isFinished && match.team_a_sets > match.team_b_sets;
+                              const isBWin = isFinished && match.team_b_sets > match.team_a_sets;
+                              return (
+                                <Link href={`/match/${match.id}`} key={match.id} className="block relative bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-3 hover:shadow-md hover:border-cyan-400 transition-all z-20 group">
+                                  <div className="flex justify-between items-center text-[10px] text-gray-400 mb-2 border-b border-gray-200 pb-1">
+                                    <span className="flex items-center"><Calendar size={10} className="mr-1"/>{match.match_date}</span>
+                                    {match.status === 'live' && <span className="text-orange-500 font-bold animate-pulse">LIVE</span>}
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <div className="flex justify-between items-center text-sm">
+                                      <span className={`truncate mr-2 ${isAWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_a_name}</span>
+                                      <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isAWin ? 'bg-cyan-100 text-cyan-800' : 'bg-white border text-gray-500'}`}>{isFinished ? match.team_a_sets : '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                      <span className={`truncate mr-2 ${isBWin ? 'font-black text-gray-900' : 'font-medium text-gray-600'}`}>{match.team_b_name}</span>
+                                      <span className={`font-mono font-bold w-6 text-center rounded text-xs py-0.5 ${isBWin ? 'bg-cyan-100 text-cyan-800' : 'bg-white border text-gray-500'}`}>{isFinished ? match.team_b_sets : '-'}</span>
+                                    </div>
+                                  </div>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           )
         )}
       </main>
